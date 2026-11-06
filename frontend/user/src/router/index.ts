@@ -260,6 +260,18 @@ const router = createRouter({
             component: templateView('GuestOrders', () => import('../views/GuestOrders.vue')),
         },
         {
+            path: '/redeem',
+            name: 'redeem',
+            component: () => import('../views/Redeem.vue'),
+            meta: { titleKey: 'redeem.title' },
+        },
+        {
+            path: '/redeem/query',
+            name: 'redeem-query',
+            component: () => import('../views/Redeem.vue'),
+            meta: { titleKey: 'redeem.queryTitle', queryMode: true },
+        },
+        {
             path: '/guest/orders/:order_no',
             name: 'guest-order-detail',
             component: templateView('GuestOrderDetail', () => import('../views/GuestOrderDetail.vue')),

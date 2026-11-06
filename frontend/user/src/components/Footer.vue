@@ -129,7 +129,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Home, LayoutGrid, Newspaper, Info, Mail, Headphones } from 'lucide-vue-next'
+import { Home, LayoutGrid, Newspaper, Info, Mail, Headphones, Ticket } from 'lucide-vue-next'
 import { useAppStore } from '../stores/app'
 import { getImageUrl } from '../utils/image'
 import { getLocalizedText } from '../utils/resellerSiteConfig'
@@ -179,6 +179,7 @@ const quickLinks = computed(() => {
   if (!builtin || builtin.about !== false) {
     items.push({ path: '/about', label: 'nav.about', icon: Info })
   }
+  items.push({ path: '/redeem', label: 'nav.redeem', icon: Ticket })
   return items
 })
 

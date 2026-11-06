@@ -67,6 +67,7 @@ import (
 	promotiongormstore "github.com/dujiao-next/internal/modules/promotion/infrastructure/gormstore"
 	reconciliationapp "github.com/dujiao-next/internal/modules/reconciliation/application"
 	reconciliationcontract "github.com/dujiao-next/internal/modules/reconciliation/contract"
+	redeemapp "github.com/dujiao-next/internal/modules/redeem/application"
 	reseller "github.com/dujiao-next/internal/modules/reseller/application"
 	resellergormstore "github.com/dujiao-next/internal/modules/reseller/infrastructure/gormstore"
 	settingsapp "github.com/dujiao-next/internal/modules/settings/application"
@@ -163,6 +164,7 @@ type Container struct {
 	PaymentService                *paymentapp.PaymentService
 	CardSecretService             *cardsecretapp.Service
 	GiftCardService               *giftcardapp.Service
+	RedeemService                 *redeemapp.Service
 	UserLoginLogService           *auditlogapp.UserLoginService
 	AuthzAuditService             *auditlogapp.AuthzService
 	AdminLoginLogService          *auditlogapp.AdminLoginService

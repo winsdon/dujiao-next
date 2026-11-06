@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/dujiao-next/internal/constants"
@@ -33,6 +35,7 @@ type Config struct {
 	Captcha      CaptchaConfig      `mapstructure:"captcha"`
 	Web          WebConfig          `mapstructure:"web"`
 	Reseller     ResellerConfig     `mapstructure:"reseller"`
+	Redeem       RedeemConfig       `mapstructure:"redeem"`
 }
 
 // AppConfig 应用级配置
@@ -421,6 +424,9 @@ func Load() *Config {
 	viper.SetDefault("captcha.turnstile.secret_key", "")
 	viper.SetDefault("captcha.turnstile.verify_url", "https://challenges.cloudflare.com/turnstile/v0/siteverify")
 	viper.SetDefault("captcha.turnstile.timeout_ms", 2000)
+	viper.SetDefault("redeem.enabled", false)
+	viper.SetDefault("redeem.cooldown_seconds", 60)
+	viper.SetDefault("redeem.orbitcard.base_url", "https://orbitcard.cc")
 	viper.SetDefault("web.admin_path", "/admin")
 	viper.SetDefault("reseller.enabled", false)
 	viper.SetDefault("reseller.main_hosts", []string{"localhost", "127.0.0.1", "::1"})
@@ -449,5 +455,57 @@ func Load() *Config {
 		panic(fmt.Errorf("配置解析失败: %w", err))
 	}
 
+	applyRedeemEnvOverrides(&cfg)
 	return &cfg
+}
+
+// RedeemConfig 卡密兑换（Orbitcard）配置。
+type RedeemConfig struct {
+	Enabled         bool                        `mapstructure:"enabled"`
+	CooldownSeconds int                         `mapstructure:"cooldown_seconds"`
+	Orbitcard       RedeemOrbitcardConfig       `mapstructure:"orbitcard"`
+	ProductMaps     map[string]RedeemProductMap `mapstructure:"product_maps"` // key = product_id 字符串
+}
+
+// RedeemOrbitcardConfig Orbitcard 开放 API。
+type RedeemOrbitcardConfig struct {
+	BaseURL   string `mapstructure:"base_url"`
+	APIKey    string `mapstructure:"api_key"`
+	APISecret string `mapstructure:"api_secret"`
+	CardID    int64  `mapstructure:"card_id"`
+}
+
+// RedeemProductMap 商品 → Orbitcard 套餐映射。
+type RedeemProductMap struct {
+	ServiceCode   string `mapstructure:"service_code"`
+	PlanType      string `mapstructure:"plan_type"`
+	PaymentRegion string `mapstructure:"payment_region"`
+	MaxServiceFee string `mapstructure:"max_service_fee"`
+	Disabled      bool   `mapstructure:"disabled"`
+}
+
+func applyRedeemEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if v := strings.TrimSpace(os.Getenv("ORBITCARD_API_KEY")); v != "" {
+		cfg.Redeem.Orbitcard.APIKey = v
+	}
+	if v := strings.TrimSpace(os.Getenv("ORBITCARD_API_SECRET")); v != "" {
+		cfg.Redeem.Orbitcard.APISecret = v
+	}
+	if v := strings.TrimSpace(os.Getenv("ORBITCARD_CARD_ID")); v != "" {
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			cfg.Redeem.Orbitcard.CardID = id
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("ORBITCARD_BASE_URL")); v != "" {
+		cfg.Redeem.Orbitcard.BaseURL = v
+	}
+	if cfg.Redeem.CooldownSeconds <= 0 {
+		cfg.Redeem.CooldownSeconds = 60
+	}
+	if strings.TrimSpace(cfg.Redeem.Orbitcard.BaseURL) == "" {
+		cfg.Redeem.Orbitcard.BaseURL = "https://orbitcard.cc"
+	}
 }

@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"strconv"
 
 	adproxyapp "github.com/dujiao-next/internal/modules/adproxy/application"
 	adproxygateway "github.com/dujiao-next/internal/modules/adproxy/infrastructure/adgateway"
@@ -25,6 +26,9 @@ import (
 	orderriskapp "github.com/dujiao-next/internal/modules/orderrisk/application"
 	orderrisklimiter "github.com/dujiao-next/internal/modules/orderrisk/infrastructure/redislimiter"
 	promotionapp "github.com/dujiao-next/internal/modules/promotion/application"
+	redeemapp "github.com/dujiao-next/internal/modules/redeem/application"
+	redeemgormstore "github.com/dujiao-next/internal/modules/redeem/infrastructure/gormstore"
+	redeemorbit "github.com/dujiao-next/internal/modules/redeem/infrastructure/orbitcard"
 	sitemapapp "github.com/dujiao-next/internal/modules/sitemap/application"
 	sitemapcontract "github.com/dujiao-next/internal/modules/sitemap/contract"
 	sitemapcache "github.com/dujiao-next/internal/modules/sitemap/infrastructure/cacheadapter"
@@ -133,6 +137,42 @@ func (c *Container) initApplicationServices() {
 		Currency: giftcardsettingscurrency.New(c.SettingService),
 		Redeemer: giftcardredeemgormuow.New(c.GiftCardRepo, c.WalletService),
 	})
+
+	// Redeem (卡密兑换 → Orbitcard)
+	{
+		redeemStore := redeemgormstore.New(gormdb.DB)
+		productMaps := map[uint]redeemapp.ProductMapConfig{}
+		for k, v := range c.Config.Redeem.ProductMaps {
+			id, err := strconv.ParseUint(k, 10, 64)
+			if err != nil || id == 0 {
+				continue
+			}
+			productMaps[uint(id)] = redeemapp.ProductMapConfig{
+				ServiceCode:   v.ServiceCode,
+				PlanType:      v.PlanType,
+				PaymentRegion: v.PaymentRegion,
+				MaxServiceFee: v.MaxServiceFee,
+				Disabled:      v.Disabled,
+			}
+		}
+		c.RedeemService = redeemapp.NewService(
+			redeemStore,
+			redeemStore,
+			redeemStore,
+			redeemgormstore.ProductLookupAdapter{Store: redeemStore},
+			redeemorbit.NewClient(redeemorbit.Config{
+				BaseURL:   c.Config.Redeem.Orbitcard.BaseURL,
+				APIKey:    c.Config.Redeem.Orbitcard.APIKey,
+				APISecret: c.Config.Redeem.Orbitcard.APISecret,
+				CardID:    c.Config.Redeem.Orbitcard.CardID,
+			}),
+			redeemapp.Config{
+				Enabled:         c.Config.Redeem.Enabled,
+				CooldownSeconds: c.Config.Redeem.CooldownSeconds,
+				ProductMaps:     productMaps,
+			},
+		)
+	}
 	c.CouponAdminService = couponapp.NewAdminService(c.CouponRepo).WithSKUDirectory(couponproductadapter.New(c.ProductSKURepo))
 	c.PromotionAdminService = promotionapp.NewAdminService(c.PromotionRepo)
 	c.ContentBannerService = contentapp.NewBannerService(

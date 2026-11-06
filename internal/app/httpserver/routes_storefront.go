@@ -19,6 +19,7 @@ import (
 	ordertransport "github.com/dujiao-next/internal/modules/order/transport/http"
 	paymenttransport "github.com/dujiao-next/internal/modules/payment/transport/http"
 	paymentcallbacktransport "github.com/dujiao-next/internal/modules/payment/transport/http/callback"
+	redeemhttp "github.com/dujiao-next/internal/modules/redeem/transport/http"
 	resellertransport "github.com/dujiao-next/internal/modules/reseller/transport/http/user"
 	publicconfigtransport "github.com/dujiao-next/internal/modules/settings/transport/http/public"
 	wallettransport "github.com/dujiao-next/internal/modules/wallet/transport/http"
@@ -81,6 +82,21 @@ func registerStorefrontRoutes(
 		captchatransport.RegisterPublicRoutes(public, captchatransport.NewPublicHandler(c.CaptchaService))
 		affiliatetransport.RegisterPublicRoutes(public, affiliateHandler)
 		memberleveltransport.RegisterPublicRoutes(public, publicMemberLevelHandler)
+		if c.RedeemService != nil {
+			redeemRule := middleware.RateLimitRule{
+				Prefix:        "dj:rate:redeem",
+				WindowSeconds: 60,
+				MaxRequests:   20,
+				BlockSeconds:  60,
+				MessageKey:    "error.rate_limited",
+			}
+			if redisClient != nil {
+				redeemGroup := public.Group("", middleware.RateLimitMiddleware(redisClient, redeemRule, middleware.KeyByIP))
+				redeemhttp.RegisterPublicRoutes(redeemGroup, redeemhttp.NewPublicHandler(c.RedeemService))
+			} else {
+				redeemhttp.RegisterPublicRoutes(public, redeemhttp.NewPublicHandler(c.RedeemService))
+			}
+		}
 	}
 
 	// 游客接口

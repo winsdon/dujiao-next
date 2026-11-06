@@ -30,6 +30,7 @@ import (
 	procurementdomain "github.com/dujiao-next/internal/modules/procurement/domain"
 	promotiondomain "github.com/dujiao-next/internal/modules/promotion/domain"
 	reconciliationdomain "github.com/dujiao-next/internal/modules/reconciliation/domain"
+	redeemdomain "github.com/dujiao-next/internal/modules/redeem/domain"
 	resellerstore "github.com/dujiao-next/internal/modules/reseller/infrastructure/gormstore"
 	settingsstore "github.com/dujiao-next/internal/modules/settings/infrastructure/gormstore"
 	siteconnectiondomain "github.com/dujiao-next/internal/modules/siteconnection/domain"
@@ -71,6 +72,8 @@ func AutoMigrate() error {
 		&cardsecretdomain.Batch{},
 		&giftcarddomain.GiftCard{},
 		&giftcarddomain.GiftCardBatch{},
+		&redeemdomain.Order{},
+		&redeemdomain.ProductMap{},
 		&fulfillmentdomain.Fulfillment{},
 		&coupondomain.Coupon{},
 		&coupondomain.CouponUsage{},
