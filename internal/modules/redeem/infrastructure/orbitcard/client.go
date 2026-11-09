@@ -202,11 +202,6 @@ func parseCreateResult(httpStatus int, body []byte) *redeemcontract.CreateSubscr
 	}
 	out.RawSafeSummary = sanitizeCreateData(data)
 
-	if env.Code == 0 && out.TaskNo != "" {
-		out.SubmissionOutcome = "accepted"
-		return out
-	}
-
 	// 59018 + request_error.submission_outcome
 	var reqErr struct {
 		RequestError *struct {
@@ -216,24 +211,29 @@ func parseCreateResult(httpStatus int, body []byte) *redeemcontract.CreateSubscr
 	}
 	_ = json.Unmarshal(env.Data, &reqErr)
 	if reqErr.RequestError != nil {
-		out.SubmissionOutcome = strings.ToLower(strings.TrimSpace(reqErr.RequestError.SubmissionOutcome))
+		// Only an explicit rejection proves that a new submission is safe.
+		out.SubmissionOutcome = "unknown"
+		if strings.EqualFold(strings.TrimSpace(reqErr.RequestError.SubmissionOutcome), "rejected") {
+			out.SubmissionOutcome = "rejected"
+		}
 		if out.ErrorCode == "" {
 			out.ErrorCode = reqErr.RequestError.Code
 		}
+		return out
 	}
-	if out.SubmissionOutcome == "" {
-		switch env.Code {
-		case 40027, 59004, 59002, 59005, 59015, 59016, 59001, 59013, 59007:
-			out.SubmissionOutcome = "rejected"
-		default:
-			if httpStatus >= 500 || env.Code == 59018 {
-				out.SubmissionOutcome = "unknown"
-			} else if env.Code != 0 {
-				out.SubmissionOutcome = "rejected"
-			} else {
-				out.SubmissionOutcome = "unknown"
-			}
-		}
+	if httpStatus >= 500 {
+		out.SubmissionOutcome = "unknown"
+		return out
+	}
+	if env.Code == 0 && out.TaskNo != "" {
+		out.SubmissionOutcome = "accepted"
+		return out
+	}
+	switch env.Code {
+	case 40027, 59004, 59002, 59005, 59015, 59016, 59001, 59013, 59007:
+		out.SubmissionOutcome = "rejected"
+	default:
+		out.SubmissionOutcome = "unknown"
 	}
 	return out
 }

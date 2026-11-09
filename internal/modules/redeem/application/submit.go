@@ -177,6 +177,9 @@ func (s *Service) Submit(ctx context.Context, in SubmitInput) (*SubmitResult, er
 		}
 		ec := createRes.ErrorCode
 		if ec == "" {
+			ec = itoa(createRes.BusinessCode)
+		}
+		if ec == "" {
 			ec = "59018"
 		}
 		_ = s.markPendingConfirm(ctx, order, ec, "结果确认中，请勿重复提交")
