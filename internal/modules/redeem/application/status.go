@@ -151,7 +151,7 @@ func (s *Service) Status(ctx context.Context, code string) (*StatusResult, error
 		} else if out.Status == redeemdomain.StatusProcessing {
 			out.Stage = "processing"
 			if out.Message == "" {
-				out.Message = "上游处理中"
+				out.Message = "正在处理，请稍候"
 			}
 		} else if out.Status == redeemdomain.StatusPendingConfirm {
 			out.Stage = "pending_confirm"

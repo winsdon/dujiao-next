@@ -1,249 +1,231 @@
 ﻿<template>
-  <div class="min-h-screen bg-background text-foreground pt-24 pb-16">
-    <div class="mx-auto w-full max-w-[480px] px-4">
-      <!-- Stepper -->
-      <div class="mb-8 flex flex-wrap items-center gap-2 text-sm">
-        <div
-          v-for="(label, i) in stepLabels"
-          :key="label"
-          class="flex items-center gap-1.5"
-          :class="i <= stepIndex ? 'text-foreground' : 'text-muted-foreground'"
+  <div class="min-h-screen bg-background pt-24 pb-16 text-foreground">
+    <div class="mx-auto w-full max-w-[520px] px-4">
+      <RedeemStepper :labels="stepLabels" :current="stepIndex" />
+
+      <div class="overflow-hidden rounded-2xl border bg-card p-6 shadow-sm sm:p-8">
+        <Transition
+          mode="out-in"
+          enter-active-class="transition duration-300 ease-out motion-reduce:transition-none"
+          enter-from-class="translate-y-2 opacity-0"
+          leave-active-class="transition duration-150 ease-in motion-reduce:transition-none"
+          leave-to-class="opacity-0"
         >
-          <span
-            class="inline-flex h-[22px] w-[22px] items-center justify-center rounded-full text-xs"
-            :class="stepCircleClass(i)"
-          >
-            <span v-if="i < stepIndex">✓</span>
-            <span v-else>{{ i + 1 }}</span>
-          </span>
-          <span>{{ label }}</span>
-        </div>
-      </div>
-
-      <div class="rounded-2xl border bg-card p-6 shadow-sm transition-opacity duration-200">
-        <!-- Query mode -->
-        <template v-if="mode === 'query'">
-          <h1 class="text-xl font-bold">{{ t('redeem.queryTitle') }}</h1>
-          <p class="mt-2 text-sm text-muted-foreground">{{ t('redeem.queryHint') }}</p>
-          <Input
-            v-model="code"
-            class="mt-4 h-11 font-mono"
-            :placeholder="t('redeem.codePlaceholder')"
-            @keyup.enter="handleQuery"
-          />
-          <Alert v-if="error" variant="destructive" class="mt-4">
-            <AlertDescription>{{ error }}</AlertDescription>
-          </Alert>
-          <div class="mt-4 flex flex-col gap-2 sm:flex-row">
-            <Button class="font-bold sm:flex-1" :style="accentStyle" :disabled="busy" @click="handleQuery">
-              {{ busy ? t('redeem.loading') : t('redeem.queryBtn') }}
-            </Button>
-            <Button variant="outline" class="sm:flex-1" @click="backToVerify">{{ t('redeem.backRedeem') }}</Button>
-          </div>
-        </template>
-
-        <!-- Step 1: verify -->
-        <template v-else-if="step === 'verify'">
-          <h1 class="text-xl font-bold">{{ t('redeem.title') }}</h1>
-          <p class="mt-2 text-sm text-muted-foreground">{{ t('redeem.subtitle') }}</p>
-          <Input
-            v-model="code"
-            class="mt-4 h-11 font-mono"
-            :placeholder="t('redeem.codePlaceholder')"
-            @keyup.enter="handleVerify"
-          />
-          <p v-if="verifyInfo?.valid" class="mt-2 text-xs text-emerald-600 dark:text-emerald-400">
-            ✓ {{ t('redeem.valid') }} · {{ verifyInfo?.product_name }} · {{ statusLabel(verifyInfo?.status) }}
-          </p>
-          <Alert v-if="error" variant="destructive" class="mt-4">
-            <AlertDescription>{{ error }}</AlertDescription>
-          </Alert>
-          <Alert v-if="cooldownSec > 0" class="mt-4">
-            <AlertDescription>{{ t('redeem.cooldown', { sec: cooldownSec }) }}</AlertDescription>
-          </Alert>
-          <Button
-            class="mt-4 w-full font-bold text-white"
-            :style="accentStyle"
-            :disabled="busy || !code.trim() || cooldownSec > 0"
-            @click="handleVerify"
-          >
-            {{ busy ? t('redeem.loading') : t('redeem.next') }}
-          </Button>
-          <button
-            type="button"
-            class="mt-4 text-sm text-muted-foreground hover:text-foreground"
-            @click="mode = 'query'; error = ''; step = 'verify'"
-          >
-            {{ t('redeem.queryLink') }}
-          </button>
-        </template>
-
-        <!-- Step 2: credentials -->
-        <template v-else-if="step === 'cred'">
-          <h1 class="text-xl font-bold">{{ t('redeem.credTitle') }}</h1>
-          <div class="mt-3 rounded-xl border bg-muted/40 px-3 py-2 text-sm">
-            <div class="font-medium">{{ verifyInfo?.product_name }}</div>
-            <div class="font-mono text-xs text-muted-foreground">{{ verifyInfo?.masked_code }} · {{ verifyInfo?.plan_type }}</div>
-          </div>
-
-          <label class="mt-4 block text-sm text-muted-foreground">{{ t('redeem.contactLabel') }}</label>
-          <Input v-model="contact" class="mt-1 h-11" :placeholder="t('redeem.contactPlaceholder')" />
-
-          <div class="mt-4 rounded-xl border bg-muted/30 p-3 text-xs leading-relaxed text-muted-foreground">
-            <template v-if="isGrok">
-              {{ t('redeem.grokHint') }}
-            </template>
-            <template v-else>
-              {{ t('redeem.gptHint') }}
-              <a
-                href="https://chatgpt.com/api/auth/session"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="ml-1 font-semibold underline"
-                :style="{ color: accent }"
-              >chatgpt.com/api/auth/session ↗</a>
-            </template>
-          </div>
-
-          <label class="mt-3 block text-sm text-muted-foreground">{{ isGrok ? t('redeem.ssoLabel') : t('redeem.sessionLabel') }}</label>
-          <Textarea
-            v-model="credential"
-            class="mt-1 min-h-[120px] font-mono text-xs"
-            :placeholder="isGrok ? t('redeem.ssoPlaceholder') : t('redeem.sessionPlaceholder')"
-          />
-          <p v-if="credHint" class="mt-2 text-xs text-emerald-600 dark:text-emerald-400">{{ credHint }}</p>
-          <p v-if="credError" class="mt-2 text-xs text-destructive">{{ credError }}</p>
-
-          <label class="mt-4 flex cursor-pointer items-start gap-2 text-sm">
-            <input v-model="authorized" type="checkbox" class="mt-1 size-4 accent-[#6E56CF]" />
-            <span>{{ t('redeem.authorize') }}</span>
-          </label>
-          <p class="mt-2 text-xs text-muted-foreground">{{ t('redeem.privacy') }}</p>
-
-          <Alert v-if="error" variant="destructive" class="mt-4">
-            <AlertDescription>{{ error }}</AlertDescription>
-          </Alert>
-
-          <div class="mt-4 flex flex-col gap-2 sm:flex-row">
-            <Button variant="outline" class="sm:flex-1" :disabled="busy" @click="step = 'verify'">{{ t('redeem.prev') }}</Button>
-            <Button
-              class="font-bold text-white sm:flex-1"
-              :style="accentStyle"
-              :disabled="busy || !canSubmit"
-              @click="handleSubmit"
-            >
-              {{ busy ? t('redeem.submitting') : t('redeem.submit') }}
-            </Button>
-          </div>
-        </template>
-
-        <!-- Step 3: processing -->
-        <template v-else-if="step === 'proc'">
-          <h1 class="text-xl font-bold">{{ t('redeem.procTitle') }}</h1>
-          <p class="mt-2 text-sm text-muted-foreground">{{ t('redeem.procHint') }}</p>
-          <div class="mt-4 space-y-0 text-sm">
-            <div class="flex justify-between border-b py-2">
-              <span class="text-muted-foreground">{{ t('redeem.stageSubmitted') }}</span>
-              <span class="text-emerald-600">✓</span>
-            </div>
-            <div class="flex justify-between border-b py-2">
-              <span class="text-muted-foreground">{{ t('redeem.stageUpstream') }}</span>
-              <span :style="{ color: accent }">{{ stageUpstreamLabel }}</span>
-            </div>
-            <div class="flex justify-between border-b py-2">
-              <span class="text-muted-foreground">{{ t('redeem.stageCaptcha') }}</span>
-              <span :class="status?.captcha?.url ? 'text-amber-600' : 'text-muted-foreground'">
-                {{ status?.captcha?.url ? t('redeem.captchaNeeded') : '—' }}
+          <!-- Query mode -->
+          <div v-if="mode === 'query'" key="query">
+            <div class="flex items-start gap-3">
+              <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                <Search class="size-5" />
               </span>
+              <div>
+                <h1 class="text-xl font-bold">{{ t('redeem.queryTitle') }}</h1>
+                <p class="mt-1 text-sm text-muted-foreground">{{ t('redeem.queryHint') }}</p>
+              </div>
+            </div>
+            <div class="relative mt-6">
+              <KeyRound class="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                v-model="code"
+                class="h-12 pl-10 font-mono"
+                :placeholder="t('redeem.codePlaceholder')"
+                @keyup.enter="handleQuery"
+              />
+            </div>
+            <Alert v-if="error" variant="destructive" class="mt-4">
+              <AlertDescription>{{ error }}</AlertDescription>
+            </Alert>
+            <div class="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
+              <Button class="h-11 font-semibold sm:flex-1" :disabled="busy || !code.trim()" @click="handleQuery">
+                <Loader2 v-if="busy" class="motion-safe:animate-spin" />
+                {{ busy ? t('redeem.loading') : t('redeem.queryBtn') }}
+              </Button>
+              <Button variant="outline" class="h-11 sm:flex-1" @click="backToVerify">
+                <ArrowLeft />
+                {{ t('redeem.backRedeem') }}
+              </Button>
             </div>
           </div>
 
-          <div v-if="status?.captcha?.url" class="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/5 p-4">
-            <div class="font-semibold">{{ t('redeem.captchaTitle') }}</div>
-            <p class="mt-1 text-xs text-muted-foreground">{{ t('redeem.captchaHint') }}</p>
-            <Button class="mt-3 font-bold text-white" :style="accentStyle" @click="openCaptcha">
-              {{ t('redeem.captchaBtn') }} ↗
-            </Button>
-          </div>
-
-          <p class="mt-4 text-xs text-muted-foreground">
-            {{ t('redeem.lastRefresh', { time: lastRefreshLabel }) }}
-          </p>
-          <Alert v-if="error" variant="destructive" class="mt-4">
-            <AlertDescription>{{ error }}</AlertDescription>
-          </Alert>
-        </template>
-
-        <!-- Step 4: result -->
-        <template v-else-if="step === 'result'">
-          <template v-if="resultKind === 'ok'">
-            <h1 class="text-xl font-bold text-emerald-600 dark:text-emerald-400">✓ {{ t('redeem.okTitle') }}</h1>
-            <div class="mt-4 space-y-0 text-sm">
-              <div class="flex justify-between border-b py-2">
-                <span class="text-muted-foreground">{{ t('redeem.plan') }}</span>
-                <span class="font-mono">{{ status?.product_name || verifyInfo?.product_name }}</span>
-              </div>
-              <div class="flex justify-between border-b py-2">
-                <span class="text-muted-foreground">{{ t('redeem.account') }}</span>
-                <span class="font-mono">{{ status?.masked_email || t('redeem.emailPending') }}</span>
-              </div>
-              <div class="flex justify-between border-b py-2">
-                <span class="text-muted-foreground">{{ t('redeem.region') }}</span>
-                <span class="font-mono">{{ status?.payment_region || '—' }}</span>
-              </div>
-              <div class="flex justify-between border-b py-2">
-                <span class="text-muted-foreground">{{ t('redeem.completedAt') }}</span>
-                <span class="font-mono">{{ formatCompleted(status?.completed_at) }}</span>
-              </div>
-              <div class="flex justify-between border-b py-2">
-                <span class="text-muted-foreground">{{ t('redeem.autoRenew') }}</span>
-                <span :class="status?.subscription_cancelled === true ? 'text-emerald-600' : 'text-amber-600'">
-                  {{ autoRenewLabel }}
-                </span>
-              </div>
-              <div class="flex justify-between border-b py-2">
-                <span class="text-muted-foreground">{{ t('redeem.code') }}</span>
-                <span class="font-mono">{{ status?.masked_code || verifyInfo?.masked_code }} {{ t('redeem.used') }}</span>
+          <!-- Step 1: verify -->
+          <div v-else-if="step === 'verify'" key="verify">
+            <div class="flex items-start gap-3">
+              <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                <Ticket class="size-5" />
+              </span>
+              <div>
+                <h1 class="text-xl font-bold">{{ t('redeem.title') }}</h1>
+                <p class="mt-1 text-sm text-muted-foreground">{{ t('redeem.subtitle') }}</p>
               </div>
             </div>
-            <div v-if="status?.subscription_cancelled !== true" class="mt-3 rounded-xl border bg-muted/40 p-3 text-xs text-muted-foreground">
-              {{ t('redeem.autoRenewHint') }}
+            <div class="relative mt-6">
+              <KeyRound class="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                v-model="code"
+                class="h-12 pl-10 font-mono"
+                :placeholder="t('redeem.codePlaceholder')"
+                @keyup.enter="handleVerify"
+              />
             </div>
-          </template>
-
-          <template v-else-if="resultKind === 'pending'">
-            <h1 class="text-xl font-bold text-amber-600">{{ t('redeem.pendingTitle') }}</h1>
-            <p class="mt-3 rounded-xl border bg-muted/40 p-3 text-sm text-muted-foreground">
-              {{ status?.message || t('redeem.pendingHint') }}
-            </p>
-          </template>
-
-          <template v-else>
-            <h1 class="text-xl font-bold text-destructive">{{ t('redeem.failTitle') }}</h1>
-            <p class="mt-3 rounded-xl border bg-muted/40 p-3 text-sm text-muted-foreground">
-              {{ status?.message || error || t('redeem.failHint') }}
-            </p>
-            <p v-if="cooldownSec > 0" class="mt-2 text-xs text-muted-foreground">
-              {{ t('redeem.cooldown', { sec: cooldownSec }) }}
-            </p>
-          </template>
-
-          <div class="mt-4 flex flex-col gap-2 sm:flex-row">
-            <Button
-              v-if="resultKind === 'fail' && cooldownSec <= 0"
-              class="font-bold text-white sm:flex-1"
-              :style="accentStyle"
-              @click="retryCred"
+            <p
+              v-if="verifyInfo?.valid"
+              class="mt-2 inline-flex items-center gap-1 rounded-full bg-success-soft px-2.5 py-1 text-xs text-success"
             >
-              {{ t('redeem.retry') }}
+              <Check class="size-3.5" stroke-width="3" />
+              {{ t('redeem.valid') }} · {{ verifyInfo?.product_name }} · {{ statusLabel(verifyInfo?.status) }}
+            </p>
+            <Alert v-if="error" variant="destructive" class="mt-4">
+              <AlertDescription>{{ error }}</AlertDescription>
+            </Alert>
+            <div
+              v-if="cooldownSec > 0"
+              class="mt-4 flex items-center gap-2 rounded-xl border border-warning/40 bg-warning-soft px-3 py-2.5 text-sm"
+            >
+              <Clock class="size-4 shrink-0 text-warning" />
+              <span class="tabular-nums">{{ t('redeem.cooldown', { sec: cooldownSec }) }}</span>
+            </div>
+            <Button
+              class="mt-5 h-11 w-full font-semibold"
+              :disabled="busy || !code.trim() || cooldownSec > 0"
+              @click="handleVerify"
+            >
+              <Loader2 v-if="busy" class="motion-safe:animate-spin" />
+              {{ busy ? t('redeem.loading') : t('redeem.next') }}
+              <ArrowRight v-if="!busy" />
             </Button>
-            <Button as-child class="font-bold text-white sm:flex-1" :style="accentStyle">
-              <router-link to="/">{{ t('redeem.home') }}</router-link>
-            </Button>
+            <div class="mt-6 border-t pt-4 text-center">
+              <button
+                type="button"
+                class="text-sm text-muted-foreground transition-colors hover:text-primary"
+                @click="openQuery"
+              >
+                {{ t('redeem.queryLink') }}
+              </button>
+            </div>
           </div>
-          <p class="mt-4 text-center text-xs text-muted-foreground">{{ t('redeem.csHint') }}</p>
-        </template>
+
+          <!-- Step 2: credentials -->
+          <div v-else-if="step === 'cred'" key="cred">
+            <h1 class="text-xl font-bold">{{ t('redeem.credTitle') }}</h1>
+            <div class="mt-4 flex items-center justify-between gap-3 rounded-xl border bg-muted/40 px-4 py-3">
+              <div class="min-w-0">
+                <div class="truncate font-medium">{{ verifyInfo?.product_name }}</div>
+                <div class="mt-0.5 font-mono text-xs text-muted-foreground">{{ verifyInfo?.masked_code }}</div>
+              </div>
+              <Badge v-if="verifyInfo?.plan_type" variant="accent" class="shrink-0">{{ verifyInfo?.plan_type }}</Badge>
+            </div>
+
+            <label for="redeem-contact" class="mt-5 block text-sm font-medium">{{ t('redeem.contactLabel') }}</label>
+            <div class="relative mt-1.5">
+              <Mail class="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="redeem-contact"
+                v-model="contact"
+                class="h-11 pl-10"
+                :placeholder="t('redeem.contactPlaceholder')"
+              />
+            </div>
+
+            <div class="mt-5 rounded-xl border bg-muted/30 p-4 text-xs leading-relaxed text-muted-foreground">
+              <template v-if="isGrok">
+                {{ t('redeem.grokHint') }}
+              </template>
+              <ol v-else class="space-y-2">
+                <li v-for="(stepText, i) in gptSteps" :key="i" class="flex gap-2.5">
+                  <span
+                    class="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[11px] font-semibold text-primary"
+                  >
+                    {{ i + 1 }}
+                  </span>
+                  <span class="pt-0.5">
+                    {{ stepText }}
+                    <a
+                      v-if="i === 1"
+                      href="https://chatgpt.com/api/auth/session"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="mt-1 inline-flex items-center gap-1 font-mono font-semibold text-primary hover:underline"
+                    >
+                      chatgpt.com/api/auth/session
+                      <ExternalLink class="size-3" />
+                    </a>
+                  </span>
+                </li>
+              </ol>
+            </div>
+
+            <label for="redeem-credential" class="mt-5 block text-sm font-medium">
+              {{ isGrok ? t('redeem.ssoLabel') : t('redeem.sessionLabel') }}
+            </label>
+            <Textarea
+              id="redeem-credential"
+              v-model="credential"
+              class="mt-1.5 min-h-[120px] font-mono text-xs transition-colors"
+              :class="credentialBorderClass"
+              :placeholder="isGrok ? t('redeem.ssoPlaceholder') : t('redeem.sessionPlaceholder')"
+            />
+            <p v-if="credHint" class="mt-2 text-xs text-success">{{ credHint }}</p>
+            <p v-if="credError" class="mt-2 text-xs text-destructive">{{ credError }}</p>
+
+            <label class="mt-5 flex cursor-pointer items-start gap-2.5 text-sm">
+              <input v-model="authorized" type="checkbox" class="mt-0.5 size-4 shrink-0 accent-primary" />
+              <span>{{ t('redeem.authorize') }}</span>
+            </label>
+            <p class="mt-2 flex gap-1.5 text-xs leading-relaxed text-muted-foreground">
+              <Lock class="mt-0.5 size-3.5 shrink-0" />
+              <span>{{ t('redeem.privacy') }}</span>
+            </p>
+
+            <Alert v-if="error" variant="destructive" class="mt-4">
+              <AlertDescription>{{ error }}</AlertDescription>
+            </Alert>
+
+            <div class="mt-6 flex flex-col gap-2 sm:flex-row-reverse">
+              <Button class="h-11 font-semibold sm:flex-1" :disabled="busy || !canSubmit" @click="handleSubmit">
+                <Loader2 v-if="busy" class="motion-safe:animate-spin" />
+                {{ busy ? t('redeem.submitting') : t('redeem.submit') }}
+              </Button>
+              <Button variant="outline" class="h-11 sm:flex-1" :disabled="busy" @click="step = 'verify'">
+                <ArrowLeft />
+                {{ t('redeem.prev') }}
+              </Button>
+            </div>
+          </div>
+
+          <!-- Step 3: processing -->
+          <div v-else-if="step === 'proc'" key="proc">
+            <RedeemProgress
+              :status="status"
+              :product-name="status?.product_name || verifyInfo?.product_name"
+              :masked-code="status?.masked_code || verifyInfo?.masked_code"
+              :next-refresh-in="nextRefreshIn"
+              :refreshing="refreshing"
+              :fallback-started-at="procStartedAt"
+              @refresh="refreshNow"
+              @open-captcha="openCaptcha"
+            />
+            <Alert v-if="error" variant="destructive" class="mt-4">
+              <AlertDescription>{{ error }}</AlertDescription>
+            </Alert>
+          </div>
+
+          <!-- Step 4: result -->
+          <div v-else key="result">
+            <RedeemResult
+              :kind="resultKind"
+              :status="status"
+              :verify-info="verifyInfo"
+              :cooldown-sec="cooldownSec"
+              :error="error"
+              @retry="retryCred"
+            />
+          </div>
+        </Transition>
       </div>
+
+      <p class="mt-6 flex items-center justify-center gap-1.5 text-center text-xs text-muted-foreground">
+        <LifeBuoy class="size-3.5" />
+        {{ t('redeem.csHint') }}
+      </p>
     </div>
   </div>
 </template>
@@ -252,7 +234,22 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Clock,
+  ExternalLink,
+  KeyRound,
+  LifeBuoy,
+  Loader2,
+  Lock,
+  Mail,
+  Search,
+  Ticket,
+} from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -261,11 +258,14 @@ import {
   type RedeemStatusResult,
   type RedeemVerifyResult,
 } from '@/api/redeem'
+import RedeemStepper from './redeem/RedeemStepper.vue'
+import RedeemProgress from './redeem/RedeemProgress.vue'
+import RedeemResult from './redeem/RedeemResult.vue'
+
+const POLL_INTERVAL_SEC = 5
 
 const { t } = useI18n()
 const route = useRoute()
-const accent = '#6E56CF'
-const accentStyle = { backgroundColor: accent }
 
 const mode = ref<'redeem' | 'query'>('redeem')
 const step = ref<'verify' | 'cred' | 'proc' | 'result'>('verify')
@@ -278,9 +278,11 @@ const error = ref('')
 const verifyInfo = ref<RedeemVerifyResult | null>(null)
 const status = ref<RedeemStatusResult | null>(null)
 const cooldownSec = ref(0)
-const lastRefresh = ref<Date | null>(null)
 const credHint = ref('')
 const credError = ref('')
+const nextRefreshIn = ref(POLL_INTERVAL_SEC)
+const refreshing = ref(false)
+const procStartedAt = ref(Date.now())
 
 let cooldownTimer: number | undefined
 let pollTimer: number | undefined
@@ -292,12 +294,14 @@ const stepLabels = computed(() => [
   t('redeem.step4'),
 ])
 
+const gptSteps = computed(() => [t('redeem.gptStep1'), t('redeem.gptStep2'), t('redeem.gptStep3')])
+
 const stepIndex = computed(() => {
-  if (mode.value === 'query' && step.value === 'verify') return 0
   if (step.value === 'verify') return 0
   if (step.value === 'cred') return 1
   if (step.value === 'proc') return 2
-  return 3
+  // 开通成功时四步全部完成
+  return resultKind.value === 'ok' ? 4 : 3
 })
 
 const isGrok = computed(() => (verifyInfo.value?.service_code || '').toLowerCase() === 'grok')
@@ -311,36 +315,18 @@ const canSubmit = computed(() => {
   )
 })
 
+const credentialBorderClass = computed(() => {
+  if (credError.value) return 'border-destructive focus-visible:ring-destructive/40'
+  if (credHint.value) return 'border-success focus-visible:ring-success/40'
+  return ''
+})
+
 const resultKind = computed<'ok' | 'fail' | 'pending'>(() => {
   const s = status.value?.status
   if (s === 'succeeded') return 'ok'
   if (s === 'pending_confirm') return 'pending'
   return 'fail'
 })
-
-const autoRenewLabel = computed(() => {
-  if (status.value?.subscription_cancelled === true) return t('redeem.autoRenewOff')
-  if (status.value?.subscription_cancelled === false) return t('redeem.autoRenewOn')
-  return t('redeem.autoRenewUnknown')
-})
-
-const stageUpstreamLabel = computed(() => {
-  const s = status.value?.status
-  if (s === 'processing' || s === 'locked') return t('redeem.inProgress')
-  if (s === 'pending_confirm') return t('redeem.confirming')
-  return status.value?.stage || '—'
-})
-
-const lastRefreshLabel = computed(() => {
-  if (!lastRefresh.value) return '—'
-  return lastRefresh.value.toLocaleTimeString('zh-CN', { hour12: false })
-})
-
-function stepCircleClass(i: number) {
-  if (i < stepIndex.value) return 'bg-[#6E56CF] text-white'
-  if (i === stepIndex.value) return 'border-2 border-[#6E56CF] bg-transparent'
-  return 'bg-muted text-muted-foreground'
-}
 
 function statusLabel(s?: string) {
   if (!s) return ''
@@ -432,10 +418,12 @@ watch(
   () => verifyInfo.value?.service_code,
   () => validateCredential(),
 )
+watch(step, (v, prev) => {
+  if (v === 'proc' && prev !== 'proc') procStartedAt.value = Date.now()
+})
 
 function applyStatus(res: RedeemStatusResult) {
   status.value = res
-  lastRefresh.value = new Date()
   if (res.cooldown_remaining_sec && res.cooldown_remaining_sec > 0) {
     startCooldown(res.cooldown_remaining_sec)
   }
@@ -523,9 +511,8 @@ async function handleSubmit() {
     await fetchStatus(true)
     startPoll()
   } catch (e: any) {
+    // Keep the credential in the form (memory only) so the user can retry after maintenance.
     error.value = e?.message || t('redeem.networkError')
-    // If maintenance, don't clear credential so user can retry later? Design: don't persist session.
-    // Keep credential in form for retry after maintenance - actually design says never store; keeping in Vue ref until leave is fine for UX on maintenance.
   } finally {
     busy.value = false
   }
@@ -535,6 +522,8 @@ async function fetchStatus(forceResult = false) {
   try {
     const { data } = await redeemAPI.status(normalizeCode(code.value))
     const res = (data?.data || data) as RedeemStatusResult
+    // 轮询成功后清掉之前的临时网络错误，避免过期报错一直挂在进度页上
+    error.value = ''
     applyStatus(res)
     if (forceResult && (res.status === 'succeeded' || res.status === 'failed')) {
       step.value = 'result'
@@ -558,11 +547,26 @@ async function handleQuery() {
   }
 }
 
+async function refreshNow() {
+  if (refreshing.value) return
+  refreshing.value = true
+  try {
+    await fetchStatus()
+  } finally {
+    refreshing.value = false
+    nextRefreshIn.value = POLL_INTERVAL_SEC
+  }
+}
+
 function startPoll() {
   stopPoll()
+  nextRefreshIn.value = POLL_INTERVAL_SEC
+  // 每秒走一次倒计时，归零时拉取状态；请求进行中不重复发起
   pollTimer = window.setInterval(() => {
-    fetchStatus()
-  }, 5000)
+    if (refreshing.value) return
+    nextRefreshIn.value -= 1
+    if (nextRefreshIn.value <= 0) void refreshNow()
+  }, 1000)
 }
 
 function stopPoll() {
@@ -585,22 +589,17 @@ function retryCred() {
   status.value = null
 }
 
+function openQuery() {
+  mode.value = 'query'
+  error.value = ''
+  step.value = 'verify'
+}
+
 function backToVerify() {
   mode.value = 'redeem'
   step.value = 'verify'
   error.value = ''
   stopPoll()
-}
-
-function formatCompleted(v?: string) {
-  if (!v) return '—'
-  try {
-    const d = new Date(v)
-    if (Number.isNaN(d.getTime())) return v
-    return d.toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' }) + ' (UTC+8)'
-  } catch {
-    return v
-  }
 }
 
 onMounted(() => {
